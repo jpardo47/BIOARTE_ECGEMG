@@ -1,2 +1,12 @@
-# Solicitudes TERRA
-Sin solicitudes iniciales.
+# Informe y solicitudes de TERRA
+
+- Firmware usa A0/A1/A2, `micros()` y omite periodos perdidos incrementando el índice; 230400 baudios se mantiene como predeterminado.
+- Capacidad: índice uint32 de 10 dígitos + tres ADC de hasta 4 dígitos + 3 comas + LF = 26 bytes/trama. A 1000 tramas/s y 8N1 se requieren hasta 260000 bit/s, superiores a 230400 bit/s (23040 bytes/s). Incluso antes del peor caso el margen puede agotarse; las pérdidas aumentarán con el índice largo. Proponer 460800 baudios seleccionable en firmware y Python, o protocolo binario, sin cambiar silenciosamente el valor predeterminado. Validación física imprescindible.
+- `SerialParser.feed_line` acepta datos antes del encabezado usando la frecuencia configurada, ya que el vaciado al conectar puede descartar el único encabezado. Valida metadatos si llegan antes de datos. El índice del modelo se normaliza a cero; saltos y rollover preservan tiempo, reinicio suma un paso y se contabiliza. Frecuencia efectiva medida por reloj monotónico y muestras recibidas.
+- `SignalProcessor` ejecuta procesamiento causal por bloques en los propios QThread; filtros se reinician al cambiar frecuencia y rechazan frecuencias incompatibles con Nyquist. Detector R heurístico experimental, requiere validación física; no es diagnóstico.
+- `SerialWorker` y `DemoSource` emiten las señales pactadas, y `stop()` solicita interrupción y espera acotadamente; el timeout configurado debe mantenerse corto para cerrar limpiamente. Modo demo produce señales sintéticas marcadas.
+- Firmware compilado para arduino:avr:mega con Arduino CLI y core AVR 1.8.7: 3928 bytes de programa, 210 bytes de RAM. La estabilidad con hardware queda pendiente. Python compileall de los módulos TERRA completado.
+- Solicitud a SOL: documentar el cálculo de velocidad, pérdida potencial del encabezado, y los límites anteriores; verificar apagado en integración y la bandera --demo.
+
+- BPM vuelve a cero ante RR inválido o más de 2 s sin picos; huecos de más de 2 s reinician filtros y detector, también dentro de un bloque. La GUI debe conservar la referencia al worker si sigue activo después de la espera acotada de stop().
+- Pruebas TERRA: `.venv\Scripts\python.exe -m pytest -q tests/test_parser.py tests/test_signal_processing.py`: 10 aprobadas. Ruff en estos cinco archivos: sin errores. Se verifica que la desconexión emite el bloque parcial de tramas completas antes del error.
