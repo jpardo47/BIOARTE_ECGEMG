@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 import json
+import math
 
 ROOT = Path(__file__).resolve().parents[1]
+
 
 @dataclass
 class FilterConfig:
@@ -16,6 +18,7 @@ class FilterConfig:
     envelope_hz: float = 5.0
     env_smoothing_hz: float = 5.0
     refractory_s: float = 0.25
+
 
 @dataclass
 class AppConfig:
@@ -44,6 +47,39 @@ class AppConfig:
     calibration_dir: Path = ROOT / "calibration"
     filters: FilterConfig = field(default_factory=FilterConfig)
 
+    def __post_init__(self):
+        positive = (
+            self.sample_rate,
+            self.adc_reference_voltage,
+            self.block_size,
+            self.serial_timeout_s,
+            self.silence_timeout_s,
+            self.plot_fps,
+            self.calibration_duration_s,
+            self.note_interval_s,
+            self.note_duration_s,
+            self.audio_rate,
+            self.baudrate,
+        )
+        if not all(math.isfinite(v) and v > 0 for v in positive):
+            raise ValueError("Frecuencias, tiempos, referencia y bloque deben ser positivos y finitos")
+        if any(int(v) != v for v in (self.block_size, self.baudrate, self.plot_fps, self.audio_rate)):
+            raise ValueError("Bloque, baudrate, FPS y tasa de audio deben ser enteros")
+        if not 2 <= self.window_s <= 15 or self.max_window_s < self.window_s or self.max_window_s > 15:
+            raise ValueError("Ventana permitida: 2 a 15 segundos")
+        if not 0 <= self.volume_min <= self.volume_max <= 1:
+            raise ValueError("Volumen minimo/maximo fuera de rango")
+        if not all(0 < v <= 1 for v in (self.audio_smoothing, self.normalization_smoothing)):
+            raise ValueError("Suavizado permitido: mayor que 0 y hasta 1")
+        if not self.pentatonic or any(not 0 <= note <= 127 for note in self.pentatonic):
+            raise ValueError("Escala MIDI invalida")
+        if self.normalization_source not in ("env", "rms", "envelope"):
+            raise ValueError("Fuente EMG invalida")
+        if not 0 <= self.saturation_low < self.saturation_high <= 1023:
+            raise ValueError("Umbrales ADC invalidos")
+        self.recordings_dir = Path(self.recordings_dir)
+        self.calibration_dir = Path(self.calibration_dir)
+
     def to_dict(self):
         data = asdict(self)
         data["recordings_dir"] = str(self.recordings_dir)
@@ -58,8 +94,4 @@ class AppConfig:
             if key in data:
                 data[key] = Path(data[key])
         obj = cls(filters=filters, **data)
-        if obj.sample_rate <= 0 or obj.adc_reference_voltage <= 0 or obj.block_size < 1:
-            raise ValueError("Frecuencia, referencia ADC y bloque deben ser positivos")
-        if not 2 <= obj.window_s <= 15:
-            raise ValueError("Ventana permitida: 2 a 15 segundos")
         return obj

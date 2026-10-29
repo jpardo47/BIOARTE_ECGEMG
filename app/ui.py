@@ -55,14 +55,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_ui(self):
         self.setWindowTitle("Bioarte ECG–EMG")
         self.resize(1280, 960)
-        root = QtWidgets.QScrollArea()
-        root.setWidgetResizable(True)
-        contents = QtWidgets.QWidget()
-        root.setWidget(contents)
+        root = QtWidgets.QWidget()
         self.setCentralWidget(root)
-        outer = QtWidgets.QVBoxLayout(contents)
+        outer = QtWidgets.QVBoxLayout(root)
+        control_scroll = QtWidgets.QScrollArea()
+        control_scroll.setWidgetResizable(True)
+        control_scroll.setMaximumHeight(310)
+        control_scroll.setMinimumHeight(200)
+        contents = QtWidgets.QWidget()
+        control_scroll.setWidget(contents)
+        panel = QtWidgets.QVBoxLayout(contents)
+        outer.addWidget(control_scroll)
         controls = QtWidgets.QGridLayout()
-        outer.addLayout(controls)
+        panel.addLayout(controls)
         self.demo_label = QtWidgets.QLabel("● DATOS SIMULADOS" if self.demo_allowed else "● DATOS REALES")
         self.demo_label.setStyleSheet(
             "font-weight:bold;color:#d97706" if self.demo_allowed else "font-weight:bold;color:#15803d"
@@ -82,13 +87,13 @@ class MainWindow(QtWidgets.QMainWindow):
         controls.addWidget(QtWidgets.QLabel("Fuente"), 0, 0)
         controls.addWidget(self.mode_combo, 0, 1)
         controls.addWidget(self.demo_label, 0, 2)
-        controls.addWidget(QtWidgets.QLabel("Puerto"), 0, 3)
-        controls.addWidget(self.port_combo, 0, 4)
-        controls.addWidget(self.refresh_button, 0, 5)
-        controls.addWidget(self.connect_button, 0, 6)
-        controls.addWidget(self.disconnect_button, 0, 7)
-        controls.addWidget(self.start_button, 0, 8)
-        controls.addWidget(self.stop_button, 0, 9)
+        controls.addWidget(QtWidgets.QLabel("Puerto"), 1, 0)
+        controls.addWidget(self.port_combo, 1, 1)
+        controls.addWidget(self.refresh_button, 1, 2)
+        controls.addWidget(self.connect_button, 1, 3)
+        controls.addWidget(self.disconnect_button, 1, 4)
+        controls.addWidget(self.start_button, 0, 3)
+        controls.addWidget(self.stop_button, 0, 4)
 
         self.status_label = QtWidgets.QLabel("Desconectado")
         self.stats_label = QtWidgets.QLabel(
@@ -97,12 +102,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.vitals_label = QtWidgets.QLabel("BPM: — | EMG normalizado: 0.00 | Saturación ECG: 0 | RAW: 0 | ENV: 0")
         self.error_label = QtWidgets.QLabel("")
         self.error_label.setStyleSheet("color:#b91c1c")
-        outer.addWidget(self.status_label)
-        outer.addWidget(self.stats_label)
-        outer.addWidget(self.vitals_label)
-        outer.addWidget(self.error_label)
+        for label in (self.status_label, self.stats_label, self.vitals_label, self.error_label):
+            label.setWordWrap(True)
+        panel.addWidget(self.status_label)
+        panel.addWidget(self.stats_label)
+        panel.addWidget(self.vitals_label)
+        panel.addWidget(self.error_label)
         settings = QtWidgets.QGridLayout()
-        outer.addLayout(settings)
+        panel.addLayout(settings)
         settings.addWidget(QtWidgets.QLabel("Ventana (s)"), 0, 0)
         self.window_spin = QtWidgets.QDoubleSpinBox()
         self.window_spin.setRange(2, 15)
@@ -137,7 +144,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         audio_box = QtWidgets.QGroupBox("Sonificación")
         audio_layout = QtWidgets.QGridLayout(audio_box)
-        outer.addWidget(audio_box)
+        panel.addWidget(audio_box)
         self.audio_mode = QtWidgets.QComboBox()
         self.audio_mode.addItem("Música reactiva", "music")
         self.audio_mode.addItem("Melodía generativa", "generative")
@@ -191,6 +198,8 @@ class MainWindow(QtWidgets.QMainWindow):
         ]
         for title, label, traces in specs:
             plot = pg.PlotWidget(title=title)
+            plot.setMinimumHeight(110)
+            plot.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Ignored)
             plot.setLabel("left", label)
             plot.setLabel("bottom", "Tiempo", units="s")
             plot.showGrid(x=True, y=True, alpha=0.25)
@@ -216,7 +225,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.audio_start.clicked.connect(self._start_audio)
         self.audio_stop.clicked.connect(self.audio.stop)
         self.audio_mode.currentIndexChanged.connect(self._audio_mode_changed)
+        self.mode_combo.currentIndexChanged.connect(self._mode_changed)
         self._audio_mode_changed()
+
+    def _mode_changed(self):
+        simulated = self.demo_allowed and self.mode_combo.currentIndex() == 1
+        self.demo_label.setText("● DATOS SIMULADOS" if simulated else "● DATOS REALES")
+        self.demo_label.setStyleSheet(
+            "font-weight:bold;color:#d97706" if simulated else "font-weight:bold;color:#15803d"
+        )
+        self.calibration = None
+        self._pending_rest = None
+        self._calibration_phase = None
+        self._level_smoothed = 0.0
+        self._load_saved_calibration()
 
     def _refresh_ports(self):
         current = self.port_combo.currentText()
@@ -291,6 +313,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.demo_label.setStyleSheet(
                 "font-weight:bold;color:#d97706" if simulated else "font-weight:bold;color:#15803d"
             )
+            self.mode_combo.setEnabled(False)
+            self.connect_button.setEnabled(False)
+            self.disconnect_button.setEnabled(True)
+            self.port_combo.setEnabled(False)
+            self.refresh_button.setEnabled(False)
             self.worker.start()
             self.start_button.setEnabled(False)
             self.stop_button.setEnabled(True)
@@ -311,6 +338,8 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception as exc:
                 self._show_error(f"Error deteniendo adquisición: {exc}")
             if not worker.isRunning():
+                # Deliver final queued blocks before closing the recording and releasing its source.
+                QtCore.QCoreApplication.sendPostedEvents(self, QtCore.QEvent.Type.MetaCall)
                 self._worker_finished(worker)
         self._stop_recording()
         self.status_label.setText("Adquisición detenida")
@@ -364,13 +393,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.connected_port = None
             self.connect_button.setEnabled(True)
             self.disconnect_button.setEnabled(False)
-        self.mode_combo.setEnabled(self.demo_allowed)
+        self.mode_combo.setEnabled(self.demo_allowed and not self.connected_port)
+        self.port_combo.setEnabled(True)
+        self.refresh_button.setEnabled(True)
         was_stopping = self._stopping_worker
         if not was_stopping:
             self.connected_port = None
             self.connect_button.setEnabled(True)
             self.disconnect_button.setEnabled(False)
             self.status_label.setText("Fuente detenida; puedes volver a conectar")
+            self.mode_combo.setEnabled(self.demo_allowed)
         self._stopping_worker = False
         if self._close_pending:
             QtCore.QTimer.singleShot(0, self.close)
@@ -464,6 +496,10 @@ class MainWindow(QtWidgets.QMainWindow):
             values.clear()
         self._plot_time.clear()
         self.last_block = None
+        self._latest_effective_fs = 0.0
+        self._level_smoothed = 0.0
+        self._pending_rest = None
+        self._calibration_phase = None
 
     def _start_recording(self):
         if self.worker is None or not self.worker.isRunning() or self.last_block is None:
@@ -476,10 +512,10 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         metadata = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "port": self.connected_port or "",
+            "port": "DEMO" if simulated else (self.connected_port or ""),
             "baudrate": self.config.baudrate,
-            "nominal_fs": self.config.sample_rate,
-            "effective_fs_initial": self._latest_effective_fs or self.config.sample_rate,
+            "nominal_fs": self.last_block.raw.sample_rate,
+            "effective_fs_initial": self._latest_effective_fs,
             "adc_reference_voltage": self.config.adc_reference_voltage,
             "filters": self.config.filters.__dict__.copy(),
             "normalization_source": self.source_combo.currentData(),
@@ -512,6 +548,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._pending_rest = None
             self._calibration_phase = None
         self._calibration_source = source
+        self._load_saved_calibration()
 
     def _begin_calibration(self, phase):
         if self.worker is None or not self.worker.isRunning():
@@ -669,10 +706,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timer.stop()
         self._calibration_phase = None
         self.audio.stop()
-        self._close_pending = True
         self._stop_acquisition()
         self.recorder.stop()
         if self.worker is not None and self.worker.isRunning():
+            self._close_pending = True
             event.ignore()
             return
         self._close_pending = False

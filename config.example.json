@@ -1,0 +1,17 @@
+{
+  "sample_rate": 1000.0,
+  "baudrate": 230400,
+  "adc_reference_voltage": 5.0,
+  "block_size": 32,
+  "window_s": 5.0,
+  "filters": {
+    "notch_enabled": true,
+    "notch_hz": 60.0,
+    "notch_q": 30.0,
+    "ecg_band": [0.5, 40.0],
+    "emg_band": [20.0, 400.0],
+    "rms_window_s": 0.15,
+    "envelope_hz": 5.0,
+    "env_smoothing_hz": 5.0
+  }
+}

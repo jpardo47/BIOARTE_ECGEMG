@@ -1,7 +1,8 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import numpy as np
 
 CHANNELS = ("ecg", "emg_raw", "emg_env")
+
 
 @dataclass
 class AcquisitionStats:
@@ -11,6 +12,7 @@ class AcquisitionStats:
     effective_fs: float = 0.0
     nominal_fs: float = 1000.0
     resets: int = 0
+
 
 @dataclass
 class SampleBlock:
@@ -22,6 +24,7 @@ class SampleBlock:
 
     def __len__(self):
         return len(self.sample_index)
+
 
 @dataclass
 class ProcessedBlock:
@@ -39,8 +42,8 @@ class ProcessedBlock:
         return len(self.raw)
 
     def control(self, source):
-        return {"env": self.emg_env_smoothed, "rms": self.emg_rms,
-                "envelope": self.emg_envelope}[source]
+        return {"env": self.emg_env_smoothed, "rms": self.emg_rms, "envelope": self.emg_envelope}[source]
+
 
 @dataclass
 class Calibration:

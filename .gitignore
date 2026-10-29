@@ -7,3 +7,4 @@ recordings/*
 !recordings/.gitkeep
 calibration/*.json
 *.egg-info/
+.tmp/

@@ -41,3 +41,37 @@ def test_dummy_audio_generates_notes_and_stops():
     engine.update(0.8, r_peak=True)
     engine.stop()
     assert engine.enabled is False
+
+
+def test_device_initialization_error_is_controlled(monkeypatch):
+    import pygame
+
+    def fail(**kwargs):
+        raise pygame.error("device unavailable")
+
+    monkeypatch.setattr(pygame.mixer, "init", fail)
+    engine = AudioEngine(AppConfig())
+    assert not engine.start("generative")
+    assert not engine.enabled and "device unavailable" in engine.error
+    engine.stop()
+
+
+def test_pending_note_waits_for_minimum_interval(monkeypatch):
+    from unittest.mock import Mock
+
+    clock = [10.0]
+    monkeypatch.setattr("app.audio_engine.time.monotonic", lambda: clock[0])
+    engine = AudioEngine(AppConfig(note_interval_s=0.2))
+    engine.enabled = True
+    engine.mode = "generative"
+    engine._sync_r = False
+    engine._notes = {note: Mock() for note in engine.config.pentatonic}
+    engine._note_channel = Mock()
+    engine.update(0.1)
+    assert engine._note_channel.play.call_count == 1
+    clock[0] += 0.05
+    engine.update(0.9)
+    assert engine._note_channel.play.call_count == 1
+    clock[0] += 0.2
+    engine.update(0.9)
+    assert engine._note_channel.play.call_count == 2

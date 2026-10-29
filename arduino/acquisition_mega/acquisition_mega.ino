@@ -4,7 +4,12 @@
 #include <stdio.h>
 
 constexpr uint32_t SAMPLE_PERIOD_US = 1000;
-constexpr unsigned long BAUD_RATE = 230400;
+// Compile with -DACQUISITION_BAUD_RATE=460800UL for the selectable alternative.
+// Change AppConfig.baudrate / JSON baudrate to the same value.
+#ifndef ACQUISITION_BAUD_RATE
+#define ACQUISITION_BAUD_RATE 230400UL
+#endif
+constexpr unsigned long BAUD_RATE = ACQUISITION_BAUD_RATE;
 uint32_t nextSample;
 uint32_t sampleIndex = 0;
 

@@ -41,6 +41,8 @@ class AudioEngine:
         self.stop()
         self.error = None
         self._sync_r = bool(sync_r)
+        self._last_note_at = -float("inf")
+        self._volume = 0.0
         if mode not in ("music", "generative"):
             self.error = "Modo de audio desconocido"
             return False
@@ -92,22 +94,24 @@ class AudioEngine:
                     self._last_level = note
                     self._pending_sync_level = note
                 if self._pending_sync_level is not None and (not self._sync_r or r_peak):
-                    self._trigger_note(self._pending_sync_level, self._volume)
-                    self._pending_sync_level = None
+                    if self._trigger_note(self._pending_sync_level, self._volume):
+                        self._pending_sync_level = None
         except Exception as exc:
             self.error = f"Error de reproducción: {exc}"
             self.enabled = False
             self._shutdown_mixer()
 
-    def _trigger_note(self, midi: int, volume: float) -> None:
+    def _trigger_note(self, midi: int, volume: float) -> bool:
         now = time.monotonic()
         if now - self._last_note_at < self.config.note_interval_s:
-            return
+            return False
         tone = self._notes.get(midi)
         if tone is not None:
             tone.set_volume(float(np.clip(volume, 0.0, 1.0)))
             self._note_channel.play(tone)
             self._last_note_at = now
+            return True
+        return False
 
     def stop(self) -> None:
         self.enabled = False

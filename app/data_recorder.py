@@ -74,7 +74,7 @@ class DataRecorder:
 
     def start(self, metadata: dict[str, Any]) -> Path:
         with self._lock:
-            if self._recording:
+            if self._recording or (self._thread is not None and self._thread.is_alive()):
                 raise RuntimeError("Ya hay una grabación activa")
             self.error = None
             self.config.recordings_dir.mkdir(parents=True, exist_ok=True)
