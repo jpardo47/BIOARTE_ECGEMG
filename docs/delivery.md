@@ -117,4 +117,4 @@ BIOARTE_MUSICA/
   tests/test_signal_processing.py
 ```
 
-Comprobación final del archivo real: **13124 filas de datos, 15 columnas**, índices consecutivos de 32 a 13155. El contador del observador previo a la detención era 12997; el CSV incluye además los bloques finales drenados durante el cierre. La grabación comienza después del primer bloque, por eso su primer índice es 32.
+Comprobación final del archivo real: **13124 filas de datos, 15 columnas**, índices consecutivos de 5 a 13128. El contador del observador previo a la detención era 12997; el CSV incluye además los bloques finales drenados durante el cierre. La grabación comienza después del primer bloque recibido; en esta ejecución su primer índice es 5. Los bloques pueden emitirse parcialmente por tiempo de espera.

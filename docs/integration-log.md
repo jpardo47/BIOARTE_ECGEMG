@@ -58,4 +58,4 @@ El usuario confirmó RAW→A1 y ENV→A2. La causa eléctrica queda pendiente de
 
 Adquisición detenida y COM10 liberado al terminar. Pendientes: resolver RAW, calibrar EMG con reposo/contracción y validar sonido físico y estabilidad de sesión larga. La prueba de 14s no sustituye una prueba de al menos un minuto ni el cálculo del peor caso de transporte.
 
-Comprobación final del archivo real: **13124 filas de datos, 15 columnas**, índices consecutivos de 32 a 13155. El contador del observador previo a la detención era 12997; el CSV incluye además los bloques finales drenados durante el cierre. La grabación comienza después del primer bloque, por eso su primer índice es 32.
+Comprobación final del archivo real: **13124 filas de datos, 15 columnas**, índices consecutivos de 5 a 13128. El contador del observador previo a la detención era 12997; el CSV incluye además los bloques finales drenados durante el cierre. La grabación comienza después del primer bloque recibido; en esta ejecución su primer índice es 5. Los bloques pueden emitirse parcialmente por tiempo de espera.
