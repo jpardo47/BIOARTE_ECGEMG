@@ -118,3 +118,10 @@ BIOARTE_MUSICA/
 ```
 
 Comprobación final del archivo real: **13124 filas de datos, 15 columnas**, índices consecutivos de 5 a 13128. El contador del observador previo a la detención era 12997; el CSV incluye además los bloques finales drenados durante el cierre. La grabación comienza después del primer bloque recibido; en esta ejecución su primer índice es 5. Los bloques pueden emitirse parcialmente por tiempo de espera.
+
+
+### Estado actual: instrumentos y calibración
+
+Piano y violín sintetizados implementados, reproducidos por salida física y escuchados por el usuario. Hay botón Probar instrumento y dos frases WAV de ejemplo en audio/. Configuración instrument=piano|violin|sine y duración predeterminada 0.6s. Suite actual: **39 pruebas aprobadas** (audio pasó de 5 a 7), compileall y Ruff limpios.
+
+La calibración guiada real de ENV A2 se intentó con 5s de reposo y 5s de contracción cómoda. El nivel de contracción no superó al reposo; el programa rechazó el resultado y no guardó un perfil inválido. No se declara verificado el control de notas por EMG. La prueba de instrumento audible fue independiente de sensores. Resultado local: recordings/classical-calibration-check.json. Contacto mejorado respecto a la prueba inicial, pero RAW aún presenta tramos cerca de cero y ECG recorte; estabilizar contacto/ganancia antes de calibrar o sincronizar por R. Adquisición y reproducción de prueba detenidas al terminar.

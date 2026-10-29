@@ -40,7 +40,8 @@ class AppConfig:
     audio_smoothing: float = 0.15
     normalization_smoothing: float = 0.15
     note_interval_s: float = 0.2
-    note_duration_s: float = 0.25
+    instrument: str = "piano"
+    note_duration_s: float = 0.6
     audio_rate: int = 44100
     pentatonic: tuple[int, ...] = (48, 50, 52, 55, 57, 60)
     recordings_dir: Path = ROOT / "recordings"
@@ -73,6 +74,8 @@ class AppConfig:
             raise ValueError("Suavizado permitido: mayor que 0 y hasta 1")
         if not self.pentatonic or any(not 0 <= note <= 127 for note in self.pentatonic):
             raise ValueError("Escala MIDI invalida")
+        if self.instrument not in ("piano", "violin", "sine"):
+            raise ValueError("Instrumento desconocido")
         if self.normalization_source not in ("env", "rms", "envelope"):
             raise ValueError("Fuente EMG invalida")
         if not 0 <= self.saturation_low < self.saturation_high <= 1023:

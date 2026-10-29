@@ -8,3 +8,5 @@
 - Pendiente de hardware: resolver RAW A1 cerca de cero, comprobar cableado/tensiones, calidad/aislamiento, estabilidad de sesión larga, calibración muscular y escucha real. Una lectura serial breve no sustituye estas comprobaciones.
 
 - Actualización hardware 29/10/2026: firmware cargado con autorización, GUI real/CSV verificados en COM10 (~999.7Hz, 12997 muestras, 0 pérdidas). RAW A1 cerca de cero: pendiente comprobación eléctrica, no validado EMG. Adquisición detenida.
+
+- Actualización instrumentos: piano/violín sintetizados y pruebas WAV entregados; usuario confirmó escucha real. Suite 39 aprobadas. Calibración ENV real rechazada por activo ≤ reposo; no se guarda perfil inválido, control muscular pendiente.

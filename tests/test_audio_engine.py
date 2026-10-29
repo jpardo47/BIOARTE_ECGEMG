@@ -75,3 +75,26 @@ def test_pending_note_waits_for_minimum_interval(monkeypatch):
     clock[0] += 0.2
     engine.update(0.9)
     assert engine._note_channel.play.call_count == 2
+
+
+def test_piano_violin_pcm_are_distinct_finite_and_bounded():
+    piano = AudioEngine(AppConfig(instrument="piano")).synthesize_note(60, 0.6)
+    violin = AudioEngine(AppConfig(instrument="violin")).synthesize_note(60, 0.6)
+    for pcm in (piano, violin):
+        assert pcm.shape == (26460, 2)
+        assert pcm.dtype == np.int16 and pcm.flags.c_contiguous
+        assert np.max(np.abs(pcm.astype(float))) <= 14746
+        assert not pcm[0].any() and not pcm[-1].any()
+        assert np.std(pcm) > 100
+    assert not np.array_equal(piano, violin)
+    # Piano decays; bowed violin sustains its energy after the attack.
+    assert np.std(piano[-8000:].astype(float)) < np.std(piano[3000:11000].astype(float))
+
+
+def test_instrument_audition_uses_dummy_device(monkeypatch):
+    monkeypatch.setenv("SDL_AUDIODRIVER", "dummy")
+    for instrument in ("piano", "violin"):
+        engine = AudioEngine(AppConfig(instrument=instrument))
+        assert engine.start("generative"), engine.error
+        assert engine.audition()
+        engine.stop()

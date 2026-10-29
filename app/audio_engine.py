@@ -42,7 +42,7 @@ class AudioEngine:
         self.error = None
         self._sync_r = bool(sync_r)
         self._last_note_at = -float("inf")
-        self._volume = 0.0
+        self._volume = self.volume_for_level(0.0)
         if mode not in ("music", "generative"):
             self.error = "Modo de audio desconocido"
             return False
@@ -101,6 +101,18 @@ class AudioEngine:
             self.enabled = False
             self._shutdown_mixer()
 
+    def audition(self) -> bool:
+        """Play one explicit test note independently of physiological input."""
+        if not self.enabled or self.mode != "generative":
+            return False
+        try:
+            note = self.config.pentatonic[len(self.config.pentatonic) // 2]
+            return self._trigger_note(note, self.volume_for_level(0.5))
+        except Exception as exc:
+            self.error = f"Error de nota de prueba: {exc}"
+            self.stop()
+            return False
+
     def _trigger_note(self, midi: int, volume: float) -> bool:
         now = time.monotonic()
         if now - self._last_note_at < self.config.note_interval_s:
@@ -140,15 +152,43 @@ class AudioEngine:
         self._beat_channel = None
         self._beat_sound = None
 
-    def _make_tone(self, pygame, midi_note: int, duration_s: float):
+    def synthesize_note(self, midi_note: int, duration_s: float) -> np.ndarray:
+        """Return a stereo PCM approximation of piano/violin, not sampled instruments."""
         rate = int(self.config.audio_rate)
-        count = max(1, int(rate * max(0.04, duration_s)))
+        duration = max(0.04, float(duration_s))
+        count = max(2, int(rate * duration))
         t = np.arange(count, dtype=np.float64) / rate
-        frequency = 440.0 * (2.0 ** ((midi_note - 69) / 12.0))
-        envelope = np.minimum(1.0, t * 40.0) * np.minimum(1.0, np.maximum(0.0, (duration_s - t) * 16.0))
-        wave = (np.sin(2 * np.pi * frequency * t) * envelope * 0.45 * 32767).astype(np.int16)
-        stereo = np.column_stack((wave, wave))
-        return pygame.sndarray.make_sound(stereo)
+        frequency = 440.0 * 2.0 ** ((midi_note - 69) / 12.0)
+        release = np.clip((count - 1 - np.arange(count)) / max(1, rate * 0.05), 0, 1)
+        wave = np.zeros(count, dtype=np.float64)
+        if self.config.instrument == "piano":
+            for harmonic in range(1, 9):
+                if harmonic * frequency >= rate * 0.45:
+                    break
+                amplitude = harmonic**-1.7
+                decay = np.exp(-t * (2.5 + 1.2 * harmonic))
+                wave += amplitude * decay * np.sin(2 * np.pi * frequency * harmonic * t)
+            envelope = np.clip(t / 0.006, 0, 1) * release
+        elif self.config.instrument == "violin":
+            # Slow bow attack, harmonic body and shallow vibrato.
+            phase = 2 * np.pi * frequency * t + (frequency * 0.003 / 5.2) * (1 - np.cos(2 * np.pi * 5.2 * t))
+            for harmonic in range(1, 13):
+                if harmonic * frequency >= rate * 0.45:
+                    break
+                wave += harmonic**-1.35 * np.sin(harmonic * phase)
+            envelope = np.clip(t / 0.09, 0, 1) * release
+        else:
+            wave = np.sin(2 * np.pi * frequency * t)
+            envelope = np.clip(t / 0.025, 0, 1) * release
+        wave *= envelope
+        peak = np.max(np.abs(wave))
+        if peak > 0:
+            wave *= 0.45 / peak
+        mono = np.rint(np.clip(wave, -1, 1) * 32767).astype(np.int16)
+        return np.ascontiguousarray(np.column_stack((mono, mono)))
+
+    def _make_tone(self, pygame, midi_note: int, duration_s: float):
+        return pygame.sndarray.make_sound(self.synthesize_note(midi_note, duration_s))
 
     def _make_click(self, pygame):
         rate = int(self.config.audio_rate)

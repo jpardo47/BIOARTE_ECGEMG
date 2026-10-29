@@ -148,6 +148,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.audio_mode = QtWidgets.QComboBox()
         self.audio_mode.addItem("Música reactiva", "music")
         self.audio_mode.addItem("Melodía generativa", "generative")
+        self.instrument_combo = QtWidgets.QComboBox()
+        self.instrument_combo.addItem("Piano sintetizado", "piano")
+        self.instrument_combo.addItem("Violín sintetizado", "violin")
+        self.instrument_combo.addItem("Seno simple", "sine")
+        self.instrument_combo.setCurrentIndex(max(0, self.instrument_combo.findData(self.config.instrument)))
+        self.instrument_combo.setToolTip("Timbres sintetizados; cambiar instrumento y reiniciar audio para aplicarlo")
+        self.audio_test = QtWidgets.QPushButton("Probar instrumento")
+        self.audio_test.setToolTip("Reproduce una nota de prueba independiente del ECG/EMG")
         self.music_path = QtWidgets.QLineEdit()
         self.music_path.setPlaceholderText("Archivo WAV, OGG o MP3")
         self.music_browse = QtWidgets.QPushButton("Elegir archivo")
@@ -184,6 +192,11 @@ class MainWindow(QtWidgets.QMainWindow):
         audio_layout.addWidget(self.sync_r, 1, 4, 1, 2)
         audio_layout.addWidget(self.audio_start, 1, 6)
         audio_layout.addWidget(self.audio_stop, 1, 7)
+
+        audio_layout.addWidget(QtWidgets.QLabel("Instrumento"), 2, 0)
+        audio_layout.addWidget(self.instrument_combo, 2, 1, 1, 2)
+        audio_layout.addWidget(self.audio_test, 2, 3)
+        self.audio_test.clicked.connect(self._test_instrument)
 
         self.plots: list[pg.PlotWidget] = []
         self.curves: list[list[pg.PlotDataItem]] = []
@@ -669,8 +682,18 @@ class MainWindow(QtWidgets.QMainWindow):
         music = self.audio_mode.currentData() == "music"
         self.music_path.setEnabled(music)
         self.music_browse.setEnabled(music)
+        self.instrument_combo.setEnabled(not music)
+
+    def _test_instrument(self):
+        self.audio_mode.setCurrentIndex(self.audio_mode.findData("generative"))
+        self._start_audio()
+        if self.audio.enabled:
+            # A single explicit audition, never represented as physiological data.
+            self.audio.audition()
+            self.status_label.setText("Nota de prueba del instrumento (independiente de sensores)")
 
     def _start_audio(self):
+        self.config.instrument = self.instrument_combo.currentData()
         self.config.volume_min = self.volume_min_spin.value()
         self.config.volume_max = self.volume_spin.value()
         self.config.note_duration_s = self.duration_spin.value()

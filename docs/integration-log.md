@@ -59,3 +59,19 @@ El usuario confirmó RAW→A1 y ENV→A2. La causa eléctrica queda pendiente de
 Adquisición detenida y COM10 liberado al terminar. Pendientes: resolver RAW, calibrar EMG con reposo/contracción y validar sonido físico y estabilidad de sesión larga. La prueba de 14s no sustituye una prueba de al menos un minuto ni el cálculo del peor caso de transporte.
 
 Comprobación final del archivo real: **13124 filas de datos, 15 columnas**, índices consecutivos de 5 a 13128. El contador del observador previo a la detención era 12997; el CSV incluye además los bloques finales drenados durante el cierre. La grabación comienza después del primer bloque recibido; en esta ejecución su primer índice es 5. Los bloques pueden emitirse parcialmente por tiempo de espera.
+
+
+## Timbres clásicos y nueva prueba de contacto
+
+Se añadieron piano y violín sintetizados (armónicos con decaimiento o arco/vibrato), selector GUI, nota de prueba independiente y WAV de ejemplo generados localmente. El formato PCM está acotado a 45% de escala completa, con ataque/salida en cero; no se trata de grabaciones acústicas reales. El banco se precalcula al iniciar audio.
+
+39 pruebas aprobadas, compileall y Ruff limpios. La reproducción por dispositivo real a 44100Hz/16bit/estéreo se inició y terminó sin error para ambos timbres; el usuario confirmó escuchar piano y violín. Resultado local en recordings/audio-output-check.json.
+
+Tras acomodar el contacto: prueba real de 6945 muestras observadas a 998.7056Hz, sin pérdidas ni líneas inválidas. Rangos observados ECG [6,1023], RAW [0,345], ENV [100,224]. Hubo 641 muestras ECG en umbral de saturación y 2232 RAW bajo el umbral: persiste recorte/contacto inestable. ENV no saturó en esta prueba y se seleccionó para calibración guiada. No se declara validado ECG/RR con recorte. Grabación local: recordings/bioarte_20261029_104307_218006.csv; resumen hardware-recheck.json. El usuario autorizó seguir indicaciones en pantalla para reposo y contracción cómoda.
+
+
+### Estado actual: instrumentos y calibración
+
+Piano y violín sintetizados implementados, reproducidos por salida física y escuchados por el usuario. Hay botón Probar instrumento y dos frases WAV de ejemplo en audio/. Configuración instrument=piano|violin|sine y duración predeterminada 0.6s. Suite actual: **39 pruebas aprobadas** (audio pasó de 5 a 7), compileall y Ruff limpios.
+
+La calibración guiada real de ENV A2 se intentó con 5s de reposo y 5s de contracción cómoda. El nivel de contracción no superó al reposo; el programa rechazó el resultado y no guardó un perfil inválido. No se declara verificado el control de notas por EMG. La prueba de instrumento audible fue independiente de sensores. Resultado local: recordings/classical-calibration-check.json. Contacto mejorado respecto a la prueba inicial, pero RAW aún presenta tramos cerca de cero y ECG recorte; estabilizar contacto/ganancia antes de calibrar o sincronizar por R. Adquisición y reproducción de prueba detenidas al terminar.

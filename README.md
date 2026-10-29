@@ -181,3 +181,12 @@ arduino-cli compile --fqbn arduino:avr:mega --build-property "compiler.cpp.extra
 Después cargar ese firmware y usar `baudrate: 460800` en el JSON de Python. Mantener 230400 en ambos extremos para el firmware predeterminado.
 
 Prueba real del montaje en COM10: firmware cargado con autorización; enlace de tres canales y grabación verificados (~999.7Hz, sin pérdidas en la prueba breve). RAW A1 permaneció cerca de cero: la validación eléctrica del MyoWare queda pendiente; detalles y siguiente medición en docs/integration-log.md.
+
+
+## Piano y violín
+
+En Sonificación, elegir **Melodía generativa**, seleccionar **Piano sintetizado** o **Violín sintetizado**, y pulsar **Iniciar audio**. El selector aplica el timbre al reiniciar audio. **Probar instrumento** reproduce una nota explícita independiente de ECG/EMG. Los timbres se generan con armónicos y envolventes; son aproximaciones sintetizadas, no grabaciones de instrumentos acústicos. Piano usa ataque corto y decaimiento; violín usa ataque progresivo, sostenimiento y vibrato suave. Las notas siguen una escala pentatónica, no reproducen una obra clásica específica.
+
+También se incluyen `audio/preview-piano.wav` y `audio/preview-violin.wav`, frases de ejemplo generadas localmente. Se pueden seleccionar como archivo en **Música reactiva** para reproducirlas en bucle y controlar volumen con el nivel EMG calibrado.
+
+Antes de comprobar respuesta al músculo, seleccionar ENV A2 y calibrar 5 segundos de reposo y 5 segundos de contracción cómoda. Un audio de prueba audible no demuestra que la calibración fisiológica ya sea válida. Si ECG recorta en 0/1023, no usar sincronización por R hasta estabilizar contacto/ganancia. Los datos personales de calibración se guardan en `calibration/` y se excluyen de Git.

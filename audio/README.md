@@ -1,5 +1,7 @@
-# Audio
+# Piano y violín sintetizados
 
-La aplicación sintetiza notas pentatónicas y un pulso corto con Pygame; no requiere archivos para el modo generativo. El modo de música reactiva acepta WAV, OGG y MP3 mediante el decodificador disponible en el sistema. El audio se controla desde la interfaz y puede detenerse sin interrumpir la adquisición.
+La melodía generativa ofrece piano, violín y seno simple. Son timbres sintetizados por armónicos y envolventes, no muestras acústicas profesionales. Se precalculan antes de reproducir. El botón Probar instrumento emite una nota de prueba independiente de los sensores. Cambiar timbre requiere reiniciar audio.
 
-Si no hay una salida de audio disponible, la aplicación muestra el error y mantiene activa la adquisición. En pruebas sin hardware de audio puede usarse `SDL_AUDIODRIVER=dummy`.
+`preview-piano.wav` y `preview-violin.wav` contienen una frase breve de demostración generada localmente, sin música comercial ni archivos externos. Se pueden usar en Música reactiva como bucles controlados por EMG calibrado. La salida física de ambos fue reproducida y el usuario confirmó oírla.
+
+El audio puede detenerse sin interrumpir adquisición. Los fallos de archivo/dispositivo se informan sin cerrar la adquisición. Las pruebas automatizadas usan SDL_AUDIODRIVER=dummy; la comprobación física usa el dispositivo real. Oír las demostraciones no valida las señales ni su calibración.
