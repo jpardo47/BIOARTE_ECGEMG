@@ -213,3 +213,31 @@ def test_calibration_phases_save_and_source_change_cancel(qt, tmp_path):
         assert window._pending_rest is None
     finally:
         dispose(window)
+
+
+def test_ecg_display_centering_preserves_acquired_data(qt, tmp_path):
+    from app.models import SampleBlock
+    from app.signal_processing import SignalProcessor
+
+    window = MainWindow(AppConfig(calibration_dir=tmp_path), demo=False)
+    try:
+        adc = np.column_stack((np.array([200, 210, 205, 225, 210]), np.full(5, 338), np.full(5, 100)))
+        indices = np.arange(5, dtype=np.uint64)
+        block = SignalProcessor(window.config).process(SampleBlock(indices, indices / 1000, adc, 1000))
+        original_volts = block.volts.copy()
+        original_adc = adc.copy()
+        window._on_block(block)
+        window._refresh_plots()
+        displayed = window.curves[0][0].getData()[1]
+        assert np.median(displayed) == pytest.approx(0)
+        np.testing.assert_array_equal(block.volts, original_volts)
+        np.testing.assert_array_equal(block.raw.adc, original_adc)
+        np.testing.assert_allclose(window.curves[0][1].getData()[1], block.ecg_filtered)
+        window.ecg_center_checkbox.setChecked(False)
+        window._refresh_plots()
+        np.testing.assert_allclose(window.curves[0][0].getData()[1], original_volts[:, 0])
+        window.ecg_raw_checkbox.setChecked(False)
+        window._refresh_plots()
+        assert not window.curves[0][0].isVisible()
+    finally:
+        dispose(window)

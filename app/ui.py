@@ -142,6 +142,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.calibration_progress.setMaximumWidth(220)
         settings.addWidget(self.calibration_progress, 1, 3, 1, 3)
 
+        self.ecg_raw_checkbox = QtWidgets.QCheckBox("Mostrar ECG crudo")
+        self.ecg_raw_checkbox.setChecked(True)
+        self.ecg_center_checkbox = QtWidgets.QCheckBox("Centrar crudo: solo visualización")
+        self.ecg_center_checkbox.setChecked(True)
+        self.ecg_center_checkbox.setToolTip(
+            "Resta la mediana de la ventana al crudo para compararlo con el filtrado; CSV y filtros conservan sus valores originales"
+        )
+        settings.addWidget(self.ecg_raw_checkbox, 2, 0, 1, 2)
+        settings.addWidget(self.ecg_center_checkbox, 2, 2, 1, 4)
+
         audio_box = QtWidgets.QGroupBox("Sonificación")
         audio_layout = QtWidgets.QGridLayout(audio_box)
         panel.addWidget(audio_box)
@@ -216,7 +226,7 @@ class MainWindow(QtWidgets.QMainWindow):
             plot.setLabel("left", label)
             plot.setLabel("bottom", "Tiempo", units="s")
             plot.showGrid(x=True, y=True, alpha=0.25)
-            plot.addLegend()
+            plot.addLegend(offset=(8, 0), colCount=len(traces), labelTextSize="8pt")
             plot.setDownsampling(auto=True, mode="peak")
             curves = [plot.plot([], [], name=name, pen=pg.mkPen(color, width=1.5)) for name, color in traces]
             outer.addWidget(plot, stretch=1)
@@ -495,8 +505,18 @@ class MainWindow(QtWidgets.QMainWindow):
         mask = t >= (t[-1] - visible)
         x = t[mask] - t[-1]
         series = [np.asarray(self._plot_data[i])[mask] for i in range(8)]
-        for curve, y in zip(self.curves[0], series[:2]):
-            curve.setData(x, y)
+        raw_ecg = series[0]
+        centered = self.ecg_center_checkbox.isChecked()
+        if centered:
+            raw_ecg = raw_ecg - np.median(raw_ecg)
+        self.curves[0][0].setData(x, raw_ecg)
+        self.curves[0][0].setVisible(self.ecg_raw_checkbox.isChecked())
+        self.curves[0][1].setData(x, series[1])
+        if self.ecg_raw_checkbox.isChecked():
+            detail = "crudo centrado (solo vista) + filtrado" if centered else "crudo absoluto + filtrado"
+        else:
+            detail = "filtrado"
+        self.plots[0].setTitle("ECG · A0 · " + detail)
         for curve, y in zip(self.curves[1], series[2:6]):
             curve.setData(x, y)
         for curve, y in zip(self.curves[2], series[6:8]):

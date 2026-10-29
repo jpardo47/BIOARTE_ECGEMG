@@ -190,3 +190,10 @@ En Sonificación, elegir **Melodía generativa**, seleccionar **Piano sintetizad
 También se incluyen `audio/preview-piano.wav` y `audio/preview-violin.wav`, frases de ejemplo generadas localmente. Se pueden seleccionar como archivo en **Música reactiva** para reproducirlas en bucle y controlar volumen con el nivel EMG calibrado.
 
 Antes de comprobar respuesta al músculo, seleccionar ENV A2 y calibrar 5 segundos de reposo y 5 segundos de contracción cómoda. Un audio de prueba audible no demuestra que la calibración fisiológica ya sea válida. Si ECG recorta en 0/1023, no usar sincronización por R hasta estabilizar contacto/ganancia. Los datos personales de calibración se guardan en `calibration/` y se excluyen de Git.
+
+
+## Inspección de ondas ECG
+
+La aplicación dibuja todas las muestras, no solo picos R. **Centrar crudo: solo visualización** elimina el desplazamiento de continua únicamente en la gráfica para compararlo con el filtrado. Desmarcarlo recupera el voltaje absoluto. **Mostrar ECG crudo** permite ocultarlo y ampliar el filtrado. Para ver detalles usar una ventana de 2s; las ondas pequeñas necesitan señal estable y sin recorte. CSV y filtros conservan sus valores originales. Ningún ajuste visual reconstruye una señal saturada; el modo demo es una forma sintética simplificada.
+
+Si el LED **VIN** del MyoWare no enciende, comprobar con multímetro 3.3V entre VIN–GND en el propio sensor; no confundirlo con **ENV**, que puede estar apagado en reposo. No agregar otra fuente en paralelo. El uso de Uno como fuente separada y sus restricciones están documentados en docs/integration-log.md.

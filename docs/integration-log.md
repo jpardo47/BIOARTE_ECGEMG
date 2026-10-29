@@ -75,3 +75,18 @@ Tras acomodar el contacto: prueba real de 6945 muestras observadas a 998.7056Hz,
 Piano y violín sintetizados implementados, reproducidos por salida física y escuchados por el usuario. Hay botón Probar instrumento y dos frases WAV de ejemplo en audio/. Configuración instrument=piano|violin|sine y duración predeterminada 0.6s. Suite actual: **39 pruebas aprobadas** (audio pasó de 5 a 7), compileall y Ruff limpios.
 
 La calibración guiada real de ENV A2 se intentó con 5s de reposo y 5s de contracción cómoda. El nivel de contracción no superó al reposo; el programa rechazó el resultado y no guardó un perfil inválido. No se declara verificado el control de notas por EMG. La prueba de instrumento audible fue independiente de sensores. Resultado local: recordings/classical-calibration-check.json. Contacto mejorado respecto a la prueba inicial, pero RAW aún presenta tramos cerca de cero y ECG recorte; estabilizar contacto/ganancia antes de calibrar o sincronizar por R. Adquisición y reproducción de prueba detenidas al terminar.
+
+
+## Vista ECG y alimentación separada
+
+Se confirmó que el trazado usa todas las muestras de ECG crudo/filtrado, no únicamente los eventos R. La superposición de crudo con nivel DC y filtrado centrado comprimía la escala. Se añadió centrado visual por mediana de ventana (predeterminado), selección de crudo visible y leyenda horizontal. El título distingue crudo centrado, crudo absoluto y filtrado. No cambia ADC, voltajes guardados ni procesamiento. Para inspección detallada usar ventana de 2s y ocultar crudo si es necesario. El centrado no reconstruye señal recortada ni garantiza distinguir P/QRS/T.
+
+La grabación inicial tuvo ADC ECG [132,339] sin saturación ADC; la posterior [6,1023] con 641/7019 filas en el umbral alto. El filtro continuo no puede recuperar amplitud perdida por recorte de adquisición. El modo demo usa una forma simplificada con pulsos; no debe interpretarse como un ECG fisiológico completo.
+
+El usuario informa VIN o ambos LED del MyoWare apagados. La guía del fabricante indica VIN encendido mientras hay alimentación; ENV puede apagarse en reposo. Verificar tensión en los pads VIN–GND del propio sensor y continuidad con multímetro; un ADC variable no confirma alimentación correcta.
+
+Es posible usar un Uno como fuente separada regulada de 3.3V: retirar el cable de alimentación del sensor desde el Mega; Uno 3.3V→MyoWare VIN; Uno GND→MyoWare GND y Mega GND; RAW→Mega A1 y ENV→Mega A2. No conectar entre sí las salidas positivas 3.3V/5V de ambas placas, no usar VIN de Arduino como salida y no modificar AREF. La salida 3.3V del Uno también tiene límite 50mA; añadir placa no demuestra que se resuelva el problema. Ambas placas deben funcionar con batería/sin conexiones a red durante contacto corporal. Cambiar cableado únicamente apagado y con electrodos retirados del cuerpo. No se cambió físicamente alimentación ni se abrió adquisición para este ajuste.
+
+Fuentes: guía MyoWare https://cdn.sparkfun.com/assets/learn_tutorials/1/9/5/6/MyoWare_v2_QuickStartGuide.pdf ; especificaciones https://myoware.com/products/technical-specifications/ ; Uno pinout https://docs.arduino.cc/resources/pinouts/A000066-full-pinout.pdf ; ECG Click https://www.mikroe.com/ecg-click .
+
+Verificación de vista ECG: 40 pruebas aprobadas con salida 0; compileall y Ruff limpios. No se realizaron lecturas del puerto real ni cambios de alimentación.
