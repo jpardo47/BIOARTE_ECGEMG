@@ -97,9 +97,17 @@ En modo real: Actualizar puertos → seleccionar COM → Conectar → Iniciar ad
 
 Tres gráficas muestran A0 ECG, A1 RAW con RMS/envolvente y A2 ENV. Se actualizan alrededor de 30FPS, independientemente del muestreo. La ventana visible permite 2–15s y los búferes están acotados. La interfaz muestra tasas nominal/efectiva, recibidas/perdidas/inválidas, saturación por canal, BPM y nivel EMG. Saturación inicial: ADC ≤5 o ≥1018. ENV puede llegar normalmente cerca de cero en reposo; ese indicador no demuestra por sí solo una falla del sensor. En MyoWare a 3.3V también puede existir recorte del sensor alrededor de 675 cuentas sin llegar al umbral ADC alto.
 
+## Interfaz
+
+![Monitor en vivo en modo demo](docs/demo-preview.png)
+
+Tema oscuro de alto contraste pensado para sesiones largas frente a señales en tiempo real. A la izquierda, un panel con tarjetas en el orden de una sesión: **Fuente y conexión**, **Adquisición** (incluida la grabación), **Calibración EMG**, **Sonificación** y **Visualización**. Sonificación muestra solo los controles del modo elegido: archivo para música reactiva; instrumento, duración e intervalo para melodía generativa.
+
+A la derecha, el encabezado indica el estado, si los datos son reales o simulados y si hay grabación o audio activos. Cinco indicadores muestran frecuencia cardíaca, nivel EMG normalizado (con barra), muestreo efectivo, muestras recibidas/perdidas/inválidas y saturación ADC por canal; se marcan en ámbar o rojo cuando conviene revisarlos. **Pausar vista** congela las gráficas para inspeccionarlas sin detener adquisición ni grabación. Los errores aparecen en una franja roja que desaparece al resolverse.
+
 ## Calibración y audio
 
-Elegir ENV A2, RMS de RAW A1 o envolvente digital de RAW. Iniciar adquisición, mantener reposo y pulsar Calibrar reposo (5s); después mantener una contracción cómoda y pulsar Calibrar contracción (5s). La barra muestra progreso. La contracción debe superar el reposo; la calibración completa se guarda en `calibration/`. Cargar calibración permite reutilizar un JSON con la misma fuente y modo. Demo y real mantienen calibraciones separadas.
+Elegir ENV A2, RMS de RAW A1 o envolvente digital de RAW. Iniciar adquisición, mantener reposo y pulsar **1 · Reposo 5 s**; después mantener una contracción cómoda y pulsar **2 · Contracción 5 s**. La barra muestra progreso. La contracción debe superar el reposo; la calibración completa se guarda en `calibration/`. Cargar calibración permite reutilizar un JSON con la misma fuente y modo. Demo y real mantienen calibraciones separadas.
 
 Normalización: `clip((value-rest)/(active-rest+1e-9), 0, 1)`, con suavizado posterior. Para audio conviene esperar a que los transitorios de filtros hayan pasado y calibrar de nuevo si cambian sensor, ganancia o montaje.
 
@@ -109,7 +117,7 @@ Melodía generativa: seleccionar el modo y activar audio, sin archivos externos.
 
 ## Grabación
 
-Durante adquisición pulsar Iniciar grabación; Detener grabación cierra el archivo y drena los bloques pendientes. Se crean `recordings/bioarte_FECHA_HORA.csv` y un JSON del mismo nombre. La escritura utiliza un hilo y una cola acotada; si el disco no mantiene el ritmo se informa el fallo en lugar de perder bloques silenciosamente.
+Durante adquisición pulsar **Grabar CSV** (aparece la insignia GRABANDO); **Detener grabación** cierra el archivo y drena los bloques pendientes. Se crean `recordings/bioarte_FECHA_HORA.csv` y un JSON del mismo nombre. La escritura utiliza un hilo y una cola acotada; si el disco no mantiene el ritmo se informa el fallo en lugar de perder bloques silenciosamente.
 
 Columnas CSV en orden:
 
@@ -185,7 +193,7 @@ Prueba real del montaje en COM10: firmware cargado con autorización; enlace de 
 
 ## Piano y violín
 
-En Sonificación, elegir **Melodía generativa**, seleccionar **Piano sintetizado** o **Violín sintetizado**, y pulsar **Iniciar audio**. El selector aplica el timbre al reiniciar audio. **Probar instrumento** reproduce una nota explícita independiente de ECG/EMG. Los timbres se generan con armónicos y envolventes; son aproximaciones sintetizadas, no grabaciones de instrumentos acústicos. Piano usa ataque corto y decaimiento; violín usa ataque progresivo, sostenimiento y vibrato suave. Las notas siguen una escala pentatónica, no reproducen una obra clásica específica.
+En Sonificación, elegir **Melodía generativa**, seleccionar **Piano sintetizado** o **Violín sintetizado**, y pulsar **Iniciar audio**. El selector aplica el timbre al reiniciar audio. **Probar** (junto al instrumento) reproduce una nota explícita independiente de ECG/EMG. Los timbres se generan con armónicos y envolventes; son aproximaciones sintetizadas, no grabaciones de instrumentos acústicos. Piano usa ataque corto y decaimiento; violín usa ataque progresivo, sostenimiento y vibrato suave. Las notas siguen una escala pentatónica, no reproducen una obra clásica específica.
 
 También se incluyen `audio/preview-piano.wav` y `audio/preview-violin.wav`, frases de ejemplo generadas localmente. Se pueden seleccionar como archivo en **Música reactiva** para reproducirlas en bucle y controlar volumen con el nivel EMG calibrado.
 

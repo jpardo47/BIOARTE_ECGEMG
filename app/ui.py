@@ -9,9 +9,9 @@ from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
-from . import __version__
+from . import __version__, theme
 from .audio_engine import AudioEngine
 from .config import AppConfig
 from .data_recorder import DataRecorder, load_calibration, save_calibration
@@ -49,112 +49,118 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_ports()
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(max(1, int(1000 / max(1, config.plot_fps))))
-        self.timer.timeout.connect(self._refresh_plots)
+        self.timer.timeout.connect(self._tick)
         self.timer.start()
 
     def _build_ui(self):
         self.setWindowTitle("Bioarte ECG–EMG")
-        self.resize(1280, 960)
+        self.setWindowIcon(theme.icon("activity", theme.TRACE_ECG, 32))
+        self.resize(1440, 900)
+        self.setMinimumSize(1100, 680)
+        self.setFont(theme.ui_font())
+        self.setStyleSheet(theme.stylesheet())
         root = QtWidgets.QWidget()
+        root.setObjectName("root")
         self.setCentralWidget(root)
-        outer = QtWidgets.QVBoxLayout(root)
-        control_scroll = QtWidgets.QScrollArea()
-        control_scroll.setWidgetResizable(True)
-        control_scroll.setMaximumHeight(310)
-        control_scroll.setMinimumHeight(200)
+        outer = QtWidgets.QHBoxLayout(root)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Sidebar: every control grouped by task, in the order a session is run.
+        sidebar = QtWidgets.QScrollArea()
+        sidebar.setObjectName("sidebar")
+        sidebar.setWidgetResizable(True)
+        sidebar.setFixedWidth(372)
+        sidebar.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         contents = QtWidgets.QWidget()
-        control_scroll.setWidget(contents)
+        contents.setObjectName("sidebarContents")
+        sidebar.setWidget(contents)
         panel = QtWidgets.QVBoxLayout(contents)
-        outer.addWidget(control_scroll)
-        controls = QtWidgets.QGridLayout()
-        panel.addLayout(controls)
-        self.demo_label = QtWidgets.QLabel("● DATOS SIMULADOS" if self.demo_allowed else "● DATOS REALES")
-        self.demo_label.setStyleSheet(
-            "font-weight:bold;color:#d97706" if self.demo_allowed else "font-weight:bold;color:#15803d"
-        )
+        panel.setContentsMargins(16, 18, 16, 16)
+        panel.setSpacing(12)
+        outer.addWidget(sidebar)
+
+        brand = QtWidgets.QHBoxLayout()
+        brand.setSpacing(10)
+        logo = QtWidgets.QLabel()
+        logo.setPixmap(theme.pixmap("activity", theme.TRACE_ECG, 28))
+        brand.addWidget(logo)
+        brand_text = QtWidgets.QVBoxLayout()
+        brand_text.setSpacing(0)
+        title = QtWidgets.QLabel("Bioarte")
+        title.setObjectName("brandTitle")
+        subtitle = QtWidgets.QLabel("ECG · EMG · Sonificación")
+        subtitle.setObjectName("brandSubtitle")
+        brand_text.addWidget(title)
+        brand_text.addWidget(subtitle)
+        brand.addLayout(brand_text)
+        brand.addStretch(1)
+        panel.addLayout(brand)
+
+        # Source and connection
         self.mode_combo = QtWidgets.QComboBox()
         self.mode_combo.addItems(["Real (Arduino)", "Demo (simulado)"])
         self.mode_combo.setCurrentIndex(1 if self.demo_allowed else 0)
         self.mode_combo.setEnabled(self.demo_allowed)
+        self.mode_combo.setToolTip("La fuente demo solo está disponible al iniciar con --demo")
         self.port_combo = QtWidgets.QComboBox()
-        self.refresh_button = QtWidgets.QPushButton("Actualizar puertos")
-        self.connect_button = QtWidgets.QPushButton("Conectar")
-        self.disconnect_button = QtWidgets.QPushButton("Desconectar")
-        self.start_button = QtWidgets.QPushButton("Iniciar adquisición")
-        self.stop_button = QtWidgets.QPushButton("Detener adquisición")
+        self.port_combo.setToolTip("Puerto serial del Arduino Mega")
+        self.refresh_button = _button("", "refresh", variant="icon", tip="Actualizar puertos")
+        self.connect_button = _button("Conectar", "plug")
+        self.disconnect_button = _button("Desconectar", "unplug")
         self.disconnect_button.setEnabled(False)
-        self.stop_button.setEnabled(False)
-        controls.addWidget(QtWidgets.QLabel("Fuente"), 0, 0)
-        controls.addWidget(self.mode_combo, 0, 1)
-        controls.addWidget(self.demo_label, 0, 2)
-        controls.addWidget(QtWidgets.QLabel("Puerto"), 1, 0)
-        controls.addWidget(self.port_combo, 1, 1)
-        controls.addWidget(self.refresh_button, 1, 2)
-        controls.addWidget(self.connect_button, 1, 3)
-        controls.addWidget(self.disconnect_button, 1, 4)
-        controls.addWidget(self.start_button, 0, 3)
-        controls.addWidget(self.stop_button, 0, 4)
+        card, body = _card("FUENTE Y CONEXIÓN")
+        body.addWidget(_field("Fuente", self.mode_combo))
+        port_row = QtWidgets.QHBoxLayout()
+        port_row.setSpacing(8)
+        port_row.addWidget(self.port_combo, 1)
+        port_row.addWidget(self.refresh_button)
+        body.addWidget(_field("Puerto", port_row))
+        body.addLayout(_row(self.connect_button, self.disconnect_button))
+        panel.addWidget(card)
 
-        self.status_label = QtWidgets.QLabel("Desconectado")
-        self.stats_label = QtWidgets.QLabel(
-            "fs nominal: — | fs efectiva: — | recibidas: 0 | perdidas: 0 | inválidas: 0"
-        )
-        self.vitals_label = QtWidgets.QLabel("BPM: — | EMG normalizado: 0.00 | Saturación ECG: 0 | RAW: 0 | ENV: 0")
-        self.error_label = QtWidgets.QLabel("")
-        self.error_label.setStyleSheet("color:#b91c1c")
-        for label in (self.status_label, self.stats_label, self.vitals_label, self.error_label):
-            label.setWordWrap(True)
-        panel.addWidget(self.status_label)
-        panel.addWidget(self.stats_label)
-        panel.addWidget(self.vitals_label)
-        panel.addWidget(self.error_label)
-        settings = QtWidgets.QGridLayout()
-        panel.addLayout(settings)
-        settings.addWidget(QtWidgets.QLabel("Ventana (s)"), 0, 0)
-        self.window_spin = QtWidgets.QDoubleSpinBox()
-        self.window_spin.setRange(2, 15)
-        self.window_spin.setSingleStep(1)
-        self.window_spin.setValue(self.config.window_s)
-        settings.addWidget(self.window_spin, 0, 1)
-        self.record_start = QtWidgets.QPushButton("Iniciar grabación")
-        self.record_stop = QtWidgets.QPushButton("Detener grabación")
+        # Acquisition and recording
+        self.start_button = _button("Iniciar adquisición", "play", variant="primary", color="#FFFFFF")
+        self.stop_button = _button("Detener", "stop", variant="danger", color=theme.DANGER)
+        self.stop_button.setToolTip("Detener adquisición")
+        self.stop_button.setEnabled(False)
+        self.record_start = _button("Grabar CSV", "record", color=theme.DANGER)
+        self.record_start.setToolTip("Iniciar grabación CSV + JSON en recordings/")
+        self.record_stop = _button("Detener grabación", "stop")
         self.record_stop.setEnabled(False)
-        settings.addWidget(self.record_start, 0, 2)
-        settings.addWidget(self.record_stop, 0, 3)
-        settings.addWidget(QtWidgets.QLabel("Normalización EMG"), 0, 4)
+        card, body = _card("ADQUISICIÓN")
+        body.addLayout(_row(self.start_button, self.stop_button, stretch=(3, 2)))
+        body.addLayout(_row(self.record_start, self.record_stop))
+        panel.addWidget(card)
+
+        # EMG calibration
         self.source_combo = QtWidgets.QComboBox()
         self.source_combo.addItem("ENV A2", "env")
         self.source_combo.addItem("RMS RAW A1", "rms")
         self.source_combo.addItem("Envolvente RAW A1", "envelope")
         idx = self.source_combo.findData(self.config.normalization_source)
         self.source_combo.setCurrentIndex(max(0, idx))
-        settings.addWidget(self.source_combo, 0, 5)
-        self.rest_button = QtWidgets.QPushButton("Calibrar reposo (5 s)")
-        self.active_button = QtWidgets.QPushButton("Calibrar contracción (5 s)")
-        self.load_cal_button = QtWidgets.QPushButton("Cargar calibración")
-        settings.addWidget(self.rest_button, 1, 0)
-        settings.addWidget(self.active_button, 1, 1)
-        settings.addWidget(self.load_cal_button, 1, 2)
+        self.rest_button = _button("1 · Reposo 5 s", "target")
+        self.rest_button.setToolTip("Calibrar reposo (5 s): mantén el músculo relajado")
+        self.active_button = _button("2 · Contracción 5 s", "target")
+        self.active_button.setToolTip("Calibrar contracción (5 s): mantén una contracción cómoda")
+        self.load_cal_button = _button("Cargar calibración", "folder")
         self.calibration_progress = QtWidgets.QProgressBar()
         self.calibration_progress.setRange(0, 100)
         self.calibration_progress.setValue(0)
         self.calibration_progress.setFormat("Calibración: %p%")
-        self.calibration_progress.setMaximumWidth(220)
-        settings.addWidget(self.calibration_progress, 1, 3, 1, 3)
+        self.calibration_state = QtWidgets.QLabel()
+        self.calibration_state.setObjectName("badge")
+        self.calibration_state.setWordWrap(True)
+        card, body = _card("CALIBRACIÓN EMG")
+        body.addWidget(_field("Señal de control", self.source_combo))
+        body.addLayout(_row(self.rest_button, self.active_button))
+        body.addWidget(self.calibration_progress)
+        body.addWidget(self.calibration_state)
+        body.addWidget(self.load_cal_button)
+        panel.addWidget(card)
 
-        self.ecg_raw_checkbox = QtWidgets.QCheckBox("Mostrar ECG crudo")
-        self.ecg_raw_checkbox.setChecked(True)
-        self.ecg_center_checkbox = QtWidgets.QCheckBox("Centrar crudo: solo visualización")
-        self.ecg_center_checkbox.setChecked(True)
-        self.ecg_center_checkbox.setToolTip(
-            "Resta la mediana de la ventana al crudo para compararlo con el filtrado; CSV y filtros conservan sus valores originales"
-        )
-        settings.addWidget(self.ecg_raw_checkbox, 2, 0, 1, 2)
-        settings.addWidget(self.ecg_center_checkbox, 2, 2, 1, 4)
-
-        audio_box = QtWidgets.QGroupBox("Sonificación")
-        audio_layout = QtWidgets.QGridLayout(audio_box)
-        panel.addWidget(audio_box)
+        # Sonification: only the controls of the selected mode are shown.
         self.audio_mode = QtWidgets.QComboBox()
         self.audio_mode.addItem("Música reactiva", "music")
         self.audio_mode.addItem("Melodía generativa", "generative")
@@ -164,74 +170,171 @@ class MainWindow(QtWidgets.QMainWindow):
         self.instrument_combo.addItem("Seno simple", "sine")
         self.instrument_combo.setCurrentIndex(max(0, self.instrument_combo.findData(self.config.instrument)))
         self.instrument_combo.setToolTip("Timbres sintetizados; cambiar instrumento y reiniciar audio para aplicarlo")
-        self.audio_test = QtWidgets.QPushButton("Probar instrumento")
+        self.audio_test = _button("Probar", "music")
         self.audio_test.setToolTip("Reproduce una nota de prueba independiente del ECG/EMG")
         self.music_path = QtWidgets.QLineEdit()
         self.music_path.setPlaceholderText("Archivo WAV, OGG o MP3")
-        self.music_browse = QtWidgets.QPushButton("Elegir archivo")
-        self.volume_min_spin = QtWidgets.QDoubleSpinBox()
-        self.volume_min_spin.setRange(0, 1)
-        self.volume_min_spin.setSingleStep(0.05)
-        self.volume_min_spin.setValue(self.config.volume_min)
-        self.volume_spin = QtWidgets.QDoubleSpinBox()
-        self.volume_spin.setRange(0, 1)
-        self.volume_spin.setSingleStep(0.05)
-        self.volume_spin.setValue(self.config.volume_max)
-        self.duration_spin = QtWidgets.QDoubleSpinBox()
-        self.duration_spin.setRange(0.05, 2)
-        self.duration_spin.setSingleStep(0.05)
-        self.duration_spin.setValue(self.config.note_duration_s)
-        self.interval_spin = QtWidgets.QDoubleSpinBox()
-        self.interval_spin.setRange(0.05, 5)
-        self.interval_spin.setSingleStep(0.05)
-        self.interval_spin.setValue(self.config.note_interval_s)
+        self.music_browse = _button("", "folder", variant="icon", tip="Elegir archivo de audio")
+        self.volume_min_spin = _spin(0, 1, 0.05, self.config.volume_min)
+        self.volume_spin = _spin(0, 1, 0.05, self.config.volume_max)
+        self.duration_spin = _spin(0.05, 2, 0.05, self.config.note_duration_s)
+        self.interval_spin = _spin(0.05, 5, 0.05, self.config.note_interval_s)
         self.sync_r = QtWidgets.QCheckBox("Sincronizar con siguiente pico R")
-        self.audio_start = QtWidgets.QPushButton("Iniciar audio")
-        self.audio_stop = QtWidgets.QPushButton("Detener audio")
-        audio_layout.addWidget(self.audio_mode, 0, 0)
-        audio_layout.addWidget(self.music_path, 0, 1, 1, 2)
-        audio_layout.addWidget(self.music_browse, 0, 3)
-        audio_layout.addWidget(QtWidgets.QLabel("Vol. mín."), 0, 4)
-        audio_layout.addWidget(self.volume_min_spin, 0, 5)
-        audio_layout.addWidget(QtWidgets.QLabel("Vol. máx."), 0, 6)
-        audio_layout.addWidget(self.volume_spin, 0, 7)
-        audio_layout.addWidget(QtWidgets.QLabel("Duración s"), 1, 0)
-        audio_layout.addWidget(self.duration_spin, 1, 1)
-        audio_layout.addWidget(QtWidgets.QLabel("Intervalo s"), 1, 2)
-        audio_layout.addWidget(self.interval_spin, 1, 3)
-        audio_layout.addWidget(self.sync_r, 1, 4, 1, 2)
-        audio_layout.addWidget(self.audio_start, 1, 6)
-        audio_layout.addWidget(self.audio_stop, 1, 7)
-
-        audio_layout.addWidget(QtWidgets.QLabel("Instrumento"), 2, 0)
-        audio_layout.addWidget(self.instrument_combo, 2, 1, 1, 2)
-        audio_layout.addWidget(self.audio_test, 2, 3)
+        self.audio_start = _button("Iniciar audio", "volume", variant="primary", color="#FFFFFF")
+        self.audio_stop = _button("Detener audio", "stop")
+        card, body = _card("SONIFICACIÓN")
+        body.addWidget(_field("Modo", self.audio_mode))
+        music_row = QtWidgets.QHBoxLayout()
+        music_row.setSpacing(8)
+        music_row.addWidget(self.music_path, 1)
+        music_row.addWidget(self.music_browse)
+        self.music_field = _field("Archivo", music_row)
+        body.addWidget(self.music_field)
+        instrument_row = QtWidgets.QHBoxLayout()
+        instrument_row.setSpacing(8)
+        instrument_row.addWidget(self.instrument_combo, 1)
+        instrument_row.addWidget(self.audio_test)
+        self.instrument_field = _field("Instrumento", instrument_row)
+        body.addWidget(self.instrument_field)
+        grid = QtWidgets.QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        grid.addWidget(_field("Vol. mín.", self.volume_min_spin), 0, 0)
+        grid.addWidget(_field("Vol. máx.", self.volume_spin), 0, 1)
+        self.duration_field = _field("Duración nota (s)", self.duration_spin)
+        self.interval_field = _field("Intervalo (s)", self.interval_spin)
+        grid.addWidget(self.duration_field, 1, 0)
+        grid.addWidget(self.interval_field, 1, 1)
+        body.addLayout(grid)
+        body.addWidget(self.sync_r)
+        body.addLayout(_row(self.audio_start, self.audio_stop))
+        panel.addWidget(card)
         self.audio_test.clicked.connect(self._test_instrument)
+
+        # Visualization
+        self.window_spin = _spin(2, 15, 1, self.config.window_s)
+        self.window_spin.setSuffix(" s")
+        self.ecg_raw_checkbox = QtWidgets.QCheckBox("Mostrar ECG crudo")
+        self.ecg_raw_checkbox.setChecked(True)
+        self.ecg_center_checkbox = QtWidgets.QCheckBox("Centrar crudo: solo visualización")
+        self.ecg_center_checkbox.setChecked(True)
+        self.ecg_center_checkbox.setToolTip(
+            "Resta la mediana de la ventana al crudo para compararlo con el filtrado; CSV y filtros conservan sus valores originales"
+        )
+        card, body = _card("VISUALIZACIÓN")
+        body.addWidget(_field("Ventana visible", self.window_spin))
+        body.addWidget(self.ecg_raw_checkbox)
+        body.addWidget(self.ecg_center_checkbox)
+        panel.addWidget(card)
+
+        panel.addStretch(1)
+        footer = QtWidgets.QLabel(
+            f"Prototipo educativo y artístico · v{__version__}\nNo es un dispositivo médico ni sirve para diagnóstico."
+        )
+        footer.setObjectName("footer")
+        footer.setWordWrap(True)
+        panel.addWidget(footer)
+
+        # Main area: header, live indicators and the three signal plots.
+        main = QtWidgets.QWidget()
+        main_layout = QtWidgets.QVBoxLayout(main)
+        main_layout.setContentsMargins(20, 16, 20, 16)
+        main_layout.setSpacing(12)
+        outer.addWidget(main, 1)
+
+        header = QtWidgets.QHBoxLayout()
+        header.setSpacing(10)
+        heading = QtWidgets.QVBoxLayout()
+        heading.setSpacing(2)
+        page_title = QtWidgets.QLabel("Monitor en vivo")
+        page_title.setObjectName("pageTitle")
+        self.status_label = QtWidgets.QLabel("Desconectado")
+        self.status_label.setObjectName("status")
+        self.status_label.setWordWrap(True)
+        heading.addWidget(page_title)
+        heading.addWidget(self.status_label)
+        header.addLayout(heading, 1)
+        self.rec_badge = _badge("GRABANDO", "danger")
+        self.rec_badge.hide()
+        self.audio_badge = _badge("AUDIO ACTIVO", "info")
+        self.audio_badge.hide()
+        self.demo_label = _badge("")
+        self._set_source_badge(self.demo_allowed)
+        self.pause_button = _button("Pausar vista", "pause")
+        self.pause_button.setCheckable(True)
+        self.pause_button.setToolTip("Congela las gráficas; la adquisición y la grabación continúan")
+        self.pause_button.toggled.connect(self._pause_toggled)
+        for widget in (self.rec_badge, self.audio_badge, self.demo_label, self.pause_button):
+            header.addWidget(widget, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
+        main_layout.addLayout(header)
+
+        self.error_label = ErrorBanner()
+        main_layout.addWidget(self.error_label)
+
+        kpis = QtWidgets.QHBoxLayout()
+        kpis.setSpacing(12)
+        self.kpi_bpm = KpiTile("FRECUENCIA CARDÍACA", "BPM")
+        self.kpi_emg = KpiTile("NIVEL EMG", "0–1", meter=True)
+        self.kpi_fs = KpiTile("MUESTREO EFECTIVO", "Hz")
+        self.kpi_samples = KpiTile("MUESTRAS RECIBIDAS")
+        self.kpi_saturation = KpiTile("SATURACIÓN ADC", "en bloque")
+        for tile in (self.kpi_bpm, self.kpi_emg, self.kpi_fs, self.kpi_samples, self.kpi_saturation):
+            kpis.addWidget(tile, 1)
+        main_layout.addLayout(kpis)
+        self._reset_indicators()
 
         self.plots: list[pg.PlotWidget] = []
         self.curves: list[list[pg.PlotDataItem]] = []
         specs = [
-            ("ECG · A0", "Amplitud (V)", [("Crudo", "#60a5fa"), ("Filtrado", "#f43f5e")]),
+            ("ECG · A0", "Amplitud (V)", [("Crudo", theme.TRACE_RAW, 1.2), ("Filtrado", theme.TRACE_ECG, 1.6)]),
             (
                 "EMG RAW · A1",
                 "Amplitud / RMS (V)",
-                [("RAW crudo", "#38bdf8"), ("Filtrado", "#f97316"), ("RMS", "#a3e635"), ("Envolvente", "#e879f9")],
+                [
+                    ("RAW crudo", theme.TRACE_RAW, 1.0),
+                    ("Filtrado", theme.TRACE_EMG, 1.3),
+                    ("RMS", theme.TRACE_RMS, 1.8),
+                    ("Envolvente", theme.TRACE_ENVELOPE, 1.8),
+                ],
             ),
-            ("EMG ENV · A2", "Amplitud (V)", [("Crudo", "#fbbf24"), ("Suavizado", "#34d399")]),
+            ("EMG ENV · A2", "Amplitud (V)", [("Crudo", theme.TRACE_ENV_RAW, 1.2), ("Suavizado", theme.TRACE_ENV_SMOOTH, 1.8)]),
         ]
+        tick_font = theme.mono_font(11)
         for title, label, traces in specs:
-            plot = pg.PlotWidget(title=title)
-            plot.setMinimumHeight(110)
+            frame = QtWidgets.QFrame()
+            frame.setObjectName("plotCard")
+            frame_layout = QtWidgets.QVBoxLayout(frame)
+            frame_layout.setContentsMargins(6, 6, 6, 6)
+            plot = pg.PlotWidget()
+            plot.setBackground(theme.PLOT_BG)
+            _set_plot_title(plot, title)
+            plot.setMinimumHeight(120)
             plot.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Ignored)
-            plot.setLabel("left", label)
-            plot.setLabel("bottom", "Tiempo", units="s")
-            plot.showGrid(x=True, y=True, alpha=0.25)
-            plot.addLegend(offset=(8, 0), colCount=len(traces), labelTextSize="8pt")
+            for name in ("left", "bottom"):
+                axis = plot.getAxis(name)
+                axis.setPen(pg.mkPen(theme.BORDER_STRONG))
+                axis.setTextPen(pg.mkPen(theme.TEXT_MUTED))
+                axis.setStyle(tickFont=tick_font)
+            plot.setLabel("left", label, color=theme.TEXT_MUTED)
+            plot.setLabel("bottom", "Tiempo", units="s", color=theme.TEXT_MUTED)
+            plot.showGrid(x=True, y=True, alpha=0.18)
+            plot.addLegend(
+                offset=(8, 4),
+                colCount=len(traces),
+                labelTextSize="8pt",
+                labelTextColor=theme.TEXT,
+                brush=pg.mkBrush(15, 23, 42, 210),
+                pen=pg.mkPen(theme.BORDER_STRONG),
+            )
             plot.setDownsampling(auto=True, mode="peak")
-            curves = [plot.plot([], [], name=name, pen=pg.mkPen(color, width=1.5)) for name, color in traces]
-            outer.addWidget(plot, stretch=1)
+            curves = [
+                plot.plot([], [], name=name, pen=pg.mkPen(color, width=width)) for name, color, width in traces
+            ]
+            frame_layout.addWidget(plot)
+            main_layout.addWidget(frame, stretch=1)
             self.plots.append(plot)
             self.curves.append(curves)
+        self._ecg_title = "ECG · A0"
 
         self.refresh_button.clicked.connect(self._refresh_ports)
         self.connect_button.clicked.connect(self._connect)
@@ -251,12 +354,45 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
         self._audio_mode_changed()
 
+    def _set_source_badge(self, simulated):
+        self.demo_label.setText("● DATOS SIMULADOS" if simulated else "● DATOS REALES")
+        _set_tone(self.demo_label, "warn" if simulated else "ok")
+
+    def _pause_toggled(self, paused):
+        self.pause_button.setText("Reanudar vista" if paused else "Pausar vista")
+        self.pause_button.setIcon(theme.icon("play" if paused else "pause", theme.FOCUS if paused else theme.TEXT))
+
+    def _reset_indicators(self):
+        self.kpi_bpm.set("—", "esperando picos R")
+        self.kpi_emg.set("0.00", "sin datos")
+        self.kpi_fs.set("—", "nominal —")
+        self.kpi_samples.set("0", "perdidas 0 · inválidas 0")
+        self.kpi_saturation.set("0", "ECG 0 · RAW 0 · ENV 0")
+
+    def _tick(self):
+        self._refresh_indicators()
+        if not self.pause_button.isChecked():
+            self._refresh_plots()
+
+    def _refresh_indicators(self):
+        recording = bool(self.recorder.is_recording)
+        if self.rec_badge.isHidden() == recording:
+            self.rec_badge.setVisible(recording)
+        audio_on = bool(self.audio.enabled)
+        if self.audio_badge.isHidden() == audio_on:
+            self.audio_badge.setVisible(audio_on)
+        cal = self.calibration
+        if cal is None:
+            text, tone = "Sin calibración: el nivel EMG se mantiene en 0", "warn"
+        else:
+            text, tone = f"Calibrado · reposo {cal.rest_level:.3f} · contracción {cal.active_level:.3f}", "ok"
+        if self.calibration_state.text() != text:
+            self.calibration_state.setText(text)
+            _set_tone(self.calibration_state, tone)
+
     def _mode_changed(self):
         simulated = self.demo_allowed and self.mode_combo.currentIndex() == 1
-        self.demo_label.setText("● DATOS SIMULADOS" if simulated else "● DATOS REALES")
-        self.demo_label.setStyleSheet(
-            "font-weight:bold;color:#d97706" if simulated else "font-weight:bold;color:#15803d"
-        )
+        self._set_source_badge(simulated)
         self.calibration = None
         self._pending_rest = None
         self._calibration_phase = None
@@ -332,10 +468,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.worker.finished.connect(self._worker_finished_signal)
             self._clear_buffers()
             self._acquisition_started_at = time.monotonic()
-            self.demo_label.setText("● DATOS SIMULADOS" if simulated else "● DATOS REALES")
-            self.demo_label.setStyleSheet(
-                "font-weight:bold;color:#d97706" if simulated else "font-weight:bold;color:#15803d"
-            )
+            self._set_source_badge(simulated)
+            self._reset_indicators()
             self.mode_combo.setEnabled(False)
             self.connect_button.setEnabled(False)
             self.disconnect_button.setEnabled(True)
@@ -464,8 +598,14 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.Slot(object)
     def _on_stats(self, stats):
         self._latest_effective_fs = float(stats.effective_fs)
-        self.stats_label.setText(
-            f"fs nominal: {stats.nominal_fs:.1f} Hz | fs efectiva: {stats.effective_fs:.1f} Hz | recibidas: {stats.received} | perdidas: {stats.lost} | inválidas: {stats.invalid}"
+        nominal = float(stats.nominal_fs)
+        drift = nominal > 0 and abs(stats.effective_fs - nominal) / nominal > 0.02
+        self.kpi_fs.set(f"{stats.effective_fs:.1f}", f"nominal {nominal:.0f} Hz", "warn" if drift else None)
+        problems = stats.lost or stats.invalid
+        self.kpi_samples.set(
+            f"{stats.received:,}".replace(",", " "),
+            f"perdidas {stats.lost} · inválidas {stats.invalid}",
+            "warn" if problems else None,
         )
 
     def _update_vitals(self, block):
@@ -480,8 +620,10 @@ class MainWindow(QtWidgets.QMainWindow):
         ):
             normalized = self.calibration.normalize(control)
             target = float(normalized[-1]) if len(normalized) else 0.0
+            calibrated = True
         else:
             target = 0.0
+            calibrated = False
         alpha = float(np.clip(self.config.normalization_smoothing, 0, 1))
         self._level_smoothed += alpha * (target - self._level_smoothed)
         counts = block.raw.adc
@@ -493,8 +635,15 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             for c in range(3)
         ]
-        self.vitals_label.setText(
-            f"BPM: {bpm} | EMG normalizado: {self._level_smoothed:.2f} | Saturación ECG: {sat[0]} RAW: {sat[1]} ENV: {sat[2]}"
+        self.kpi_bpm.set(bpm, "último intervalo R–R" if len(finite) else "esperando picos R")
+        self.kpi_emg.set(
+            f"{self._level_smoothed:.2f}",
+            f"fuente {self.source_combo.currentText()}" if calibrated else "sin calibración",
+            None if calibrated else "warn",
+            level=self._level_smoothed,
+        )
+        self.kpi_saturation.set(
+            str(sum(sat)), f"ECG {sat[0]} · RAW {sat[1]} · ENV {sat[2]}", "danger" if any(sat) else "ok"
         )
 
     def _refresh_plots(self):
@@ -516,7 +665,10 @@ class MainWindow(QtWidgets.QMainWindow):
             detail = "crudo centrado (solo vista) + filtrado" if centered else "crudo absoluto + filtrado"
         else:
             detail = "filtrado"
-        self.plots[0].setTitle("ECG · A0 · " + detail)
+        title = "ECG · A0 · " + detail
+        if title != self._ecg_title:
+            self._ecg_title = title
+            _set_plot_title(self.plots[0], title)
         for curve, y in zip(self.curves[1], series[2:6]):
             curve.setData(x, y)
         for curve, y in zip(self.curves[2], series[6:8]):
@@ -703,6 +855,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.music_path.setEnabled(music)
         self.music_browse.setEnabled(music)
         self.instrument_combo.setEnabled(not music)
+        # Progressive disclosure: show only the controls that affect the selected mode.
+        self.music_field.setVisible(music)
+        for field in (self.instrument_field, self.duration_field, self.interval_field):
+            field.setVisible(not music)
 
     def _test_instrument(self):
         self.audio_mode.setCurrentIndex(self.audio_mode.findData("generative"))
@@ -757,3 +913,151 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._close_pending = False
         event.accept()
+
+
+class ErrorBanner(QtWidgets.QLabel):
+    """Error label that only occupies space while it has a message."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("errorBanner")
+        self.setWordWrap(True)
+        self.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.setAccessibleName("Mensaje de error")
+        self.hide()
+
+    def setText(self, text):
+        super().setText(text)
+        self.setVisible(bool(text))
+
+    def clear(self):
+        super().clear()
+        self.hide()
+
+
+class KpiTile(QtWidgets.QFrame):
+    """Large tabular value with caption and secondary detail line."""
+
+    def __init__(self, caption, unit="", meter=False):
+        super().__init__()
+        self.setObjectName("kpi")
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(2)
+        caption_label = QtWidgets.QLabel(caption)
+        caption_label.setObjectName("kpiCaption")
+        layout.addWidget(caption_label)
+        value_row = QtWidgets.QHBoxLayout()
+        value_row.setSpacing(6)
+        self.value = QtWidgets.QLabel("—")
+        self.value.setObjectName("kpiValue")
+        self.value.setFont(theme.mono_font(24, QtGui.QFont.Weight.DemiBold))
+        value_row.addWidget(self.value, 0, QtCore.Qt.AlignmentFlag.AlignBaseline)
+        if unit:
+            unit_label = QtWidgets.QLabel(unit)
+            unit_label.setObjectName("kpiUnit")
+            value_row.addWidget(unit_label, 0, QtCore.Qt.AlignmentFlag.AlignBaseline)
+        value_row.addStretch(1)
+        layout.addLayout(value_row)
+        self.meter = None
+        if meter:
+            self.meter = QtWidgets.QProgressBar()
+            self.meter.setObjectName("meter")
+            self.meter.setRange(0, 100)
+            self.meter.setTextVisible(False)
+            layout.addWidget(self.meter)
+        self.detail = QtWidgets.QLabel("")
+        self.detail.setObjectName("kpiDetail")
+        layout.addWidget(self.detail)
+        self.setAccessibleName(caption.capitalize())
+
+    def set(self, value, detail=None, tone=None, level=None):
+        if self.value.text() != value:
+            self.value.setText(value)
+        if detail is not None and self.detail.text() != detail:
+            self.detail.setText(detail)
+        if self.value.property("tone") != tone:
+            _set_tone(self.value, tone)
+            _set_tone(self.detail, tone)
+        if self.meter is not None and level is not None:
+            self.meter.setValue(int(round(float(np.clip(level, 0, 1)) * 100)))
+
+
+def _set_tone(widget, tone):
+    widget.setProperty("tone", tone)
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
+
+
+def _badge(text, tone=None):
+    label = QtWidgets.QLabel(text)
+    label.setObjectName("badge")
+    if tone:
+        label.setProperty("tone", tone)
+    return label
+
+
+def _button(text, icon_name=None, variant=None, color=theme.TEXT, tip=None):
+    button = QtWidgets.QPushButton(text)
+    if icon_name:
+        button.setIcon(theme.icon(icon_name, color))
+    if variant:
+        button.setProperty("variant", variant)
+    if tip:
+        button.setToolTip(tip)
+        button.setAccessibleName(tip)
+    button.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+    return button
+
+
+def _spin(minimum, maximum, step, value):
+    spin = QtWidgets.QDoubleSpinBox()
+    spin.setRange(minimum, maximum)
+    spin.setSingleStep(step)
+    spin.setValue(value)
+    return spin
+
+
+def _card(title):
+    card = QtWidgets.QFrame()
+    card.setObjectName("card")
+    body = QtWidgets.QVBoxLayout(card)
+    body.setContentsMargins(14, 12, 14, 14)
+    body.setSpacing(10)
+    heading = QtWidgets.QLabel(title)
+    heading.setObjectName("cardTitle")
+    body.addWidget(heading)
+    return card, body
+
+
+def _field(label, content):
+    """Visible label stacked above its control (layout or widget)."""
+    wrapper = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(wrapper)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(4)
+    caption = QtWidgets.QLabel(label)
+    caption.setObjectName("fieldLabel")
+    layout.addWidget(caption)
+    if isinstance(content, QtWidgets.QLayout):
+        layout.addLayout(content)
+        buddy = content.itemAt(0).widget() if content.count() else None
+    else:
+        layout.addWidget(content)
+        buddy = content
+    if buddy is not None:
+        caption.setBuddy(buddy)
+        buddy.setAccessibleName(label)
+    return wrapper
+
+
+def _row(*widgets, stretch=None):
+    row = QtWidgets.QHBoxLayout()
+    row.setSpacing(8)
+    for i, widget in enumerate(widgets):
+        row.addWidget(widget, stretch[i] if stretch else 1)
+    return row
+
+
+def _set_plot_title(plot, text):
+    plot.setTitle(text, color=theme.TEXT, size="10pt")
